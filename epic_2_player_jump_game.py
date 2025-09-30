@@ -16,7 +16,8 @@ LEVEL_HEIGHT = 20000  # MASSIVE 10x level!
 GRAVITY = 0.5
 JUMP_FORCE = -14
 MOVE_SPEED = 6
-PLAYER_SIZE = 30
+PLAYER_SIZE = 60  # Collision box size
+SPRITE_RENDER_SIZE = 360  # Visual sprite size (larger for better visibility)
 BOUNCE_FORCE = -30  # Super bounce!
 TRAP_DAMAGE = 25
 
@@ -42,7 +43,7 @@ TRAP_PURPLE = (148, 0, 211)
 LAVA_RED = (255, 69, 0)
 
 class Player:
-    def __init__(self, x, y, color):
+    def __init__(self, x, y, color, sprite_folder):
         self.x = x
         self.y = y
         self.width = PLAYER_SIZE
@@ -58,6 +59,74 @@ class Player:
         self.respawning = False
         self.health = 100
         self.invincible_timer = 0
+        self.sprite_folder = sprite_folder
+        self.load_sprites()
+        self.animation_frame = 0
+        self.animation_timer = 0
+        self.facing_right = True
+        # Sprite offset to center larger sprite on smaller collision box
+        # The sprite should be drawn so its bottom aligns with the collision box bottom
+        self.sprite_offset_x = -(SPRITE_RENDER_SIZE - PLAYER_SIZE) // 2  # Center horizontally
+        self.sprite_offset_y = -(SPRITE_RENDER_SIZE - PLAYER_SIZE - 10) // 2  # Align bottoms (sprite extends up)
+
+    def load_sprites(self):
+        # Load sprite sheets
+        try:
+            idle_path = f'{self.sprite_folder}-Idle.png'
+            walk_path = f'{self.sprite_folder}-Walk.png'
+            hurt_path = f'{self.sprite_folder}-Hurt.png'
+
+            print(f"Loading sprites from: {idle_path}")
+
+            idle_sheet = pygame.image.load(idle_path)
+            walk_sheet = pygame.image.load(walk_path)
+            hurt_sheet = pygame.image.load(hurt_path)
+
+            print(f"Idle sheet size: {idle_sheet.get_size()}")
+            print(f"Walk sheet size: {walk_sheet.get_size()}")
+            print(f"Hurt sheet size: {hurt_sheet.get_size()}")
+
+            # Extract frames - each sheet has different frame counts
+            # Idle: 6 frames, Walk: 8 frames, Hurt: 4 frames
+            self.idle_frames = self.extract_frames(idle_sheet, 6, 100, 100)
+            self.walk_frames = self.extract_frames(walk_sheet, 8, 100, 100)
+            self.hurt_frames = self.extract_frames(hurt_sheet, 4, 100, 100)
+
+            print(f"Extracted {len(self.idle_frames)} idle, {len(self.walk_frames)} walk, {len(self.hurt_frames)} hurt frames")
+
+            # Scale to sprite render size (larger than collision box for better visibility)
+            self.idle_frames = [pygame.transform.scale(f, (SPRITE_RENDER_SIZE, SPRITE_RENDER_SIZE)).convert_alpha() for f in self.idle_frames]
+            self.walk_frames = [pygame.transform.scale(f, (SPRITE_RENDER_SIZE, SPRITE_RENDER_SIZE)).convert_alpha() for f in self.walk_frames]
+            self.hurt_frames = [pygame.transform.scale(f, (SPRITE_RENDER_SIZE, SPRITE_RENDER_SIZE)).convert_alpha() for f in self.hurt_frames]
+
+            print(f"Successfully loaded sprites!")
+        except Exception as e:
+            # Fallback to colored rectangles if sprites fail to load
+            print(f"Failed to load sprites: {e}")
+            import traceback
+            traceback.print_exc()
+            self.idle_frames = None
+            self.walk_frames = None
+            self.hurt_frames = None
+
+    def extract_frames(self, sheet, frame_count, frame_width, frame_height):
+        frames = []
+        sheet_width, sheet_height = sheet.get_size()
+        print(f"  Sheet dimensions: {sheet_width}x{sheet_height}")
+        print(f"  Extracting {frame_count} frames of size {frame_width}x{frame_height}")
+
+        for i in range(frame_count):
+            x = i * frame_width
+            rect = pygame.Rect(x, 0, frame_width, frame_height)
+            print(f"  Frame {i}: x={x}, rect={rect}, valid={x + frame_width <= sheet_width and frame_height <= sheet_height}")
+
+            if x + frame_width > sheet_width or frame_height > sheet_height:
+                print(f"  ERROR: Frame {i} out of bounds!")
+                raise ValueError(f"Frame {i} out of bounds: need {x + frame_width}x{frame_height}, have {sheet_width}x{sheet_height}")
+
+            frame = sheet.subsurface(rect).copy()
+            frames.append(frame)
+        return frames
 
     def update(self, platforms):
         # Apply gravity
@@ -66,6 +135,18 @@ class Player:
         # Update position
         self.x += self.vx
         self.y += self.vy
+
+        # Update animation
+        self.animation_timer += 1
+        if self.animation_timer >= 8:  # Change frame every 8 ticks
+            self.animation_timer = 0
+            self.animation_frame = (self.animation_frame + 1) % 8  # Use max frame count
+
+        # Update facing direction
+        if self.vx > 0:
+            self.facing_right = True
+        elif self.vx < 0:
+            self.facing_right = False
 
         # Update timers
         if self.invincible_timer > 0:
@@ -202,8 +283,30 @@ class Player:
         if (self.respawning and (self.respawn_timer // 10) % 2) or (self.invincible_timer > 0 and (self.invincible_timer // 5) % 2):
             return
 
-        pygame.draw.rect(surface, self.color,
-                        (self.x + offset_x, screen_y, self.width, self.height))
+        # Draw animated sprite if available
+        if self.idle_frames and self.walk_frames and self.hurt_frames:
+            # Choose animation based on state
+            if self.invincible_timer > 0 and not self.respawning:
+                frames = self.hurt_frames
+            elif abs(self.vx) > 0:
+                frames = self.walk_frames
+            else:
+                frames = self.idle_frames
+
+            # Get current frame (wrap to available frames)
+            frame_index = self.animation_frame % len(frames)
+            current_frame = frames[frame_index]
+
+            # Flip if facing left
+            if not self.facing_right:
+                current_frame = pygame.transform.flip(current_frame, True, False)
+
+            # Draw sprite with offset to center it on collision box
+            surface.blit(current_frame, (self.x + offset_x + self.sprite_offset_x, screen_y + self.sprite_offset_y))
+        else:
+            # Fallback to colored rectangle
+            pygame.draw.rect(surface, self.color,
+                            (self.x + offset_x, screen_y, self.width, self.height))
 
 class Game:
     def __init__(self):
@@ -519,8 +622,8 @@ class Game:
     def reset_game(self):
         self.game_won = False
         self.winner = None
-        self.player1 = Player(100, LEVEL_HEIGHT - 150, RED)
-        self.player2 = Player(100, LEVEL_HEIGHT - 150, TEAL)
+        self.player1 = Player(100, LEVEL_HEIGHT - 150, RED, 'Characters(100x100)/Orc/Orc/Orc')
+        self.player2 = Player(100, LEVEL_HEIGHT - 150, TEAL, 'Characters(100x100)/Soldier/Soldier/Soldier')
         self.platforms = self.generate_level()
 
     def run(self):
