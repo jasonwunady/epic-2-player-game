@@ -7,7 +7,7 @@ import math
 pygame.init()
 pygame.mixer.init()
 
-# Constants - 10x EPIC GAME!
+# Constants - 10x BIGGER GAME!
 WINDOW_WIDTH = 1400
 WINDOW_HEIGHT = 900
 CANVAS_WIDTH = 680
@@ -20,6 +20,8 @@ PLAYER_SIZE = 60  # Collision box size
 SPRITE_RENDER_SIZE = 360  # Visual sprite size (larger for better visibility)
 BOUNCE_FORCE = -30  # Super bounce!
 TRAP_DAMAGE = 25
+PROJECTILE_SPEED = 10
+ATTACK_COOLDOWN = 30  # Frames between attacks
 
 # Colors
 SKY_BLUE = (135, 206, 235)
@@ -37,10 +39,39 @@ GOLD = (255, 215, 0)
 BUTTON_GREEN = (76, 175, 80)
 CRACKED_BROWN = (101, 50, 13)
 ORANGE = (255, 165, 0)
-# New epic elements
+# New special elements
 BOUNCE_BLUE = (0, 191, 255)
 TRAP_PURPLE = (148, 0, 211)
 LAVA_RED = (255, 69, 0)
+
+class Projectile:
+    def __init__(self, x, y, direction, projectile_type, sprite, owner):
+        self.x = x
+        self.y = y
+        self.direction = direction  # 1 for right, -1 for left
+        self.type = projectile_type  # 'arrow' or 'axe'
+        self.sprite = sprite
+        self.width = 280 if projectile_type == 'arrow' else 420
+        self.height = 280 if projectile_type == 'arrow' else 420
+        self.active = True
+        self.lifetime = 120  # Frames before disappearing
+        self.owner = owner  # Which player shot this
+
+    def update(self):
+        self.x += PROJECTILE_SPEED * self.direction
+        self.lifetime -= 1
+        if self.lifetime <= 0:
+            self.active = False
+
+    def draw(self, surface, offset_x, camera_y):
+        if not self.active:
+            return
+        screen_y = self.y - camera_y
+        if self.sprite:
+            sprite = self.sprite
+            if self.direction < 0:
+                sprite = pygame.transform.flip(sprite, True, False)
+            surface.blit(sprite, (self.x + offset_x, screen_y))
 
 class Player:
     def __init__(self, x, y, color, sprite_folder):
@@ -68,6 +99,9 @@ class Player:
         # The sprite should be drawn so its bottom aligns with the collision box bottom
         self.sprite_offset_x = -(SPRITE_RENDER_SIZE - PLAYER_SIZE) // 2  # Center horizontally
         self.sprite_offset_y = -(SPRITE_RENDER_SIZE - PLAYER_SIZE - 10) // 2  # Align bottoms (sprite extends up)
+        self.attack_cooldown = 0
+        self.is_attacking = False
+        self.attack_timer = 0
 
     def load_sprites(self):
         # Load sprite sheets
@@ -155,6 +189,12 @@ class Player:
             self.respawn_timer -= 1
             if self.respawn_timer <= 0:
                 self.respawning = False
+        if self.attack_cooldown > 0:
+            self.attack_cooldown -= 1
+        if self.attack_timer > 0:
+            self.attack_timer -= 1
+        else:
+            self.is_attacking = False
 
         # Reset ground state
         self.on_ground = False
@@ -242,16 +282,38 @@ class Player:
         self.vx = 0
         return False
 
-    def jump(self):
+    def jump(self, jump_sound=None):
         if self.on_ground:
             self.vy = JUMP_FORCE
             self.on_ground = False
+            if jump_sound:
+                jump_sound.play()
 
     def move_left(self):
         self.vx = -MOVE_SPEED
 
     def move_right(self):
         self.vx = MOVE_SPEED
+
+    def attack(self, projectile_sprite, projectile_type):
+        if self.attack_cooldown <= 0:
+            self.attack_cooldown = ATTACK_COOLDOWN
+            self.is_attacking = True
+            self.attack_timer = 10
+            # Create projectile in front of player
+            direction = 1 if self.facing_right else -1
+            proj_width = 280 if projectile_type == 'arrow' else 420
+            proj_height = 280 if projectile_type == 'arrow' else 420
+
+            # Position projectile centered on player
+            if self.facing_right:
+                proj_x = self.x + self.width
+            else:
+                proj_x = self.x - proj_width
+
+            proj_y = self.y + (self.height // 2) - (proj_height // 2)
+            return Projectile(proj_x, proj_y, direction, projectile_type, projectile_sprite, self)
+        return None
 
     def take_damage(self, damage):
         if self.invincible_timer <= 0:
@@ -311,7 +373,7 @@ class Player:
 class Game:
     def __init__(self):
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        pygame.display.set_caption("EPIC 2 Player Jump Game - 10x BIGGER!")
+        pygame.display.set_caption("2 Player Jump Game - 10x BIGGER!")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 36)
         self.small_font = pygame.font.Font(None, 24)
@@ -326,6 +388,38 @@ class Game:
             pygame.mixer.music.play(-1)  # Loop indefinitely
         except:
             print("Could not load background music")
+
+        # Load sound effects
+        try:
+            self.jump_sound = pygame.mixer.Sound('jump_sound_trimmed.wav')
+            self.jump_sound.set_volume(0.8)
+        except:
+            self.jump_sound = None
+
+        try:
+            self.level_up_sound = pygame.mixer.Sound('pixel-level-up-sound-351836.mp3')
+            self.level_up_sound.set_volume(0.4)
+        except:
+            self.level_up_sound = None
+
+        try:
+            self.winner_sound = pygame.mixer.Sound('winner-game-sound-404167.mp3')
+            self.winner_sound.set_volume(0.6)
+        except:
+            self.winner_sound = None
+
+        # Load projectile sprites
+        try:
+            arrow_img = pygame.image.load('Characters(100x100)/Soldier/Arrow(projectile)/Arrow01(100x100).png')
+            self.arrow_sprite = pygame.transform.scale(arrow_img, (280, 280)).convert_alpha()
+        except:
+            self.arrow_sprite = None
+
+        try:
+            axe_img = pygame.image.load('Characters(100x100)/Orc/Orc(Split Effects)/Orc-attack01_Effect.png')
+            self.axe_sprite = pygame.transform.scale(axe_img, (420, 420)).convert_alpha()
+        except:
+            self.axe_sprite = None
 
     def update_music(self):
         # Music is handled by pygame.mixer.music
@@ -346,16 +440,16 @@ class Game:
             'players_on': set()
         })
 
-        # Generate EPIC MASSIVE level!
+        # Generate massive level!
         seed = random.random()
-        num_platforms = 200  # EPIC number of platforms!
+        num_platforms = 200  # Lots of platforms!
 
         for i in range(num_platforms):
             x = 50 + ((seed + i * 0.3) % 1) * (CANVAS_WIDTH - 200)
-            y = LEVEL_HEIGHT - 200 - (i * 95)  # Epic vertical spacing
+            y = LEVEL_HEIGHT - 200 - (i * 95)  # Vertical spacing
             width = 80 + ((seed + i * 0.5) % 1) * 100
 
-            # Epic variety of elements!
+            # Variety of elements!
             element_type = 'normal'
             if i % 6 == 0 and i > 0:  # Bounce pads
                 element_type = 'bounce'
@@ -399,7 +493,7 @@ class Game:
                     platform['state'] = 'about_to_break'
 
     def draw_background(self, surface, offset_x, camera_y):
-        # Epic gradient sky
+        # Gradient sky
         for y in range(CANVAS_HEIGHT):
             ratio = y / CANVAS_HEIGHT
             r = int(SKY_BLUE[0] + (CLOUD_WHITE[0] - SKY_BLUE[0]) * ratio)
@@ -407,16 +501,16 @@ class Game:
             b = int(SKY_BLUE[2] + (CLOUD_WHITE[2] - SKY_BLUE[2]) * ratio)
             pygame.draw.line(surface, (r, g, b), (offset_x, y), (offset_x + CANVAS_WIDTH, y))
 
-        # Epic moving clouds
+        # Moving clouds
         cloud_offset = int(camera_y * 0.2) % 150
         for i in range(10):
             cloud_x = offset_x + (i * 120 + cloud_offset) % CANVAS_WIDTH
             cloud_y = 50 + (i * 60) % 300
-            # Epic cloud clusters
+            # Cloud clusters
             for j in range(3):
                 pygame.draw.circle(surface, CLOUD_WHITE, (cloud_x + j*15, cloud_y), 20 + j*5)
 
-        # Epic mountains
+        # Mountains
         mountain_points = [(offset_x, CANVAS_HEIGHT)]
         for i in range(12):
             x = offset_x + (i * 60)
@@ -428,18 +522,18 @@ class Game:
     def draw_level(self, surface, offset_x, camera_y):
         self.draw_background(surface, offset_x, camera_y)
 
-        # Epic start line
+        # Start line
         start_screen_y = LEVEL_HEIGHT - 40 - camera_y
         if start_screen_y >= -100 and start_screen_y <= CANVAS_HEIGHT + 100:
             pygame.draw.rect(surface, GREEN, (offset_x, start_screen_y, CANVAS_WIDTH, 40))
-            start_text = self.small_font.render("EPIC START!", True, WHITE)
+            start_text = self.small_font.render("START!", True, WHITE)
             surface.blit(start_text, (offset_x + 20, start_screen_y + 12))
 
-        # Epic finish line - match the collision detection
+        # Finish line - match the collision detection
         finish_screen_y = 760 - camera_y  # Match the y <= 800 check
         if finish_screen_y >= -100 and finish_screen_y <= CANVAS_HEIGHT + 100:
             pygame.draw.rect(surface, FINISH_RED, (offset_x, finish_screen_y, CANVAS_WIDTH, 40))
-            finish_text = self.small_font.render("EPIC VICTORY!", True, WHITE)
+            finish_text = self.small_font.render("VICTORY!", True, WHITE)
             surface.blit(finish_text, (offset_x + 20, finish_screen_y + 12))
 
         # Draw all platforms and special elements
@@ -508,21 +602,29 @@ class Game:
         if self.game_won:
             return
 
-        # Player 1 controls
+        # Player 1 controls (Orc - WASD + S for attack)
         if keys[pygame.K_a]:
             self.player1.move_left()
         if keys[pygame.K_d]:
             self.player1.move_right()
         if keys[pygame.K_w]:
-            self.player1.jump()
+            self.player1.jump(self.jump_sound)
+        if keys[pygame.K_s]:
+            projectile = self.player1.attack(self.axe_sprite, 'axe')
+            if projectile:
+                self.projectiles.append(projectile)
 
-        # Player 2 controls
+        # Player 2 controls (Soldier - Arrows + Down for attack)
         if keys[pygame.K_LEFT]:
             self.player2.move_left()
         if keys[pygame.K_RIGHT]:
             self.player2.move_right()
         if keys[pygame.K_UP]:
-            self.player2.jump()
+            self.player2.jump(self.jump_sound)
+        if keys[pygame.K_DOWN]:
+            projectile = self.player2.attack(self.arrow_sprite, 'arrow')
+            if projectile:
+                self.projectiles.append(projectile)
 
     def update(self):
         if not self.game_won:
@@ -532,31 +634,62 @@ class Game:
             if self.player1.update(self.platforms) and not self.game_won:
                 self.game_won = True
                 self.winner = 1
+                if self.winner_sound:
+                    self.winner_sound.play()
 
             if self.player2.update(self.platforms) and not self.game_won:
                 self.game_won = True
                 self.winner = 2
+                if self.winner_sound:
+                    self.winner_sound.play()
+
+            # Update projectiles
+            for projectile in self.projectiles[:]:
+                projectile.update()
+                if not projectile.active:
+                    self.projectiles.remove(projectile)
+                # Check collision with players (but not the owner)
+                elif projectile.owner != self.player1 and (
+                      projectile.x < self.player1.x + self.player1.width and
+                      projectile.x + projectile.width > self.player1.x and
+                      projectile.y < self.player1.y + self.player1.height and
+                      projectile.y + projectile.height > self.player1.y):
+                    self.player1.take_damage(10)
+                    projectile.active = False
+                elif projectile.owner != self.player2 and (
+                      projectile.x < self.player2.x + self.player2.width and
+                      projectile.x + projectile.width > self.player2.x and
+                      projectile.y < self.player2.y + self.player2.height and
+                      projectile.y + projectile.height > self.player2.y):
+                    self.player2.take_damage(10)
+                    projectile.active = False
 
     def draw(self):
         self.screen.fill(BLACK)
 
-        # Draw epic game areas
+        # Draw game areas
         self.draw_level(self.screen, 10, self.player1.camera_y)
         self.player1.draw(self.screen, 10, self.player1.camera_y)
         self.player2.draw(self.screen, 10, self.player1.camera_y)
+        # Draw projectiles for player 1's view
+        for projectile in self.projectiles:
+            projectile.draw(self.screen, 10, self.player1.camera_y)
 
         self.draw_level(self.screen, 710, self.player2.camera_y)
         self.player1.draw(self.screen, 710, self.player2.camera_y)
         self.player2.draw(self.screen, 710, self.player2.camera_y)
+        # Draw projectiles for player 2's view
+        for projectile in self.projectiles:
+            projectile.draw(self.screen, 710, self.player2.camera_y)
 
-        # Epic divider
+        # Divider
         pygame.draw.line(self.screen, GOLD, (700, 0), (700, WINDOW_HEIGHT), 5)
 
-        # Epic UI
-        title_text = self.font.render("EPIC 10X MASSIVE LEVEL!", True, GOLD)
+        # UI
+        title_text = self.font.render("10X MASSIVE LEVEL!", True, GOLD)
         self.screen.blit(title_text, (WINDOW_WIDTH // 2 - 150, 5))
 
-        music_text = self.small_font.render("♪ Epic Music Playing ♪", True, WHITE)
+        music_text = self.small_font.render("♪ Music Playing ♪", True, WHITE)
         self.screen.blit(music_text, (WINDOW_WIDTH // 2 - 80, 35))
 
         # Player info
@@ -570,22 +703,22 @@ class Game:
         self.screen.blit(controls1, (260, 835))
         self.screen.blit(controls2, (960, 835))
 
-        # Epic status
+        # Status
         if self.game_won:
             if self.winner == 1:
-                status1 = self.font.render("EPIC WINNER!", True, GOLD)
+                status1 = self.font.render("WINNER!", True, GOLD)
                 status2 = self.font.render("Try again!", True, WHITE)
             else:
                 status1 = self.font.render("Try again!", True, WHITE)
-                status2 = self.font.render("EPIC WINNER!", True, GOLD)
+                status2 = self.font.render("WINNER!", True, GOLD)
         else:
-            status1 = self.font.render("Epic Climb!", True, WHITE)
-            status2 = self.font.render("Epic Climb!", True, WHITE)
+            status1 = self.font.render("Climb!", True, WHITE)
+            status2 = self.font.render("Climb!", True, WHITE)
 
         self.screen.blit(status1, (220, 860))
         self.screen.blit(status2, (920, 860))
 
-        # Epic stats - fix height calculation to show 100% when winning
+        # Stats - fix height calculation to show 100% when winning
         # Calculate height based on actual finish line position
         finish_y = 800  # Match finish line position
         height1 = max(0, min(100, int((LEVEL_HEIGHT - self.player1.y) / (LEVEL_HEIGHT - finish_y) * 100)))
@@ -610,10 +743,10 @@ class Game:
         self.screen.blit(health_text1, (350, 885))
         self.screen.blit(health_text2, (1050, 885))
 
-        # Epic reset button
+        # Reset button
         button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 100, 60, 200, 50)
         pygame.draw.rect(self.screen, BUTTON_GREEN, button_rect)
-        button_text = self.font.render("New Epic Game", True, WHITE)
+        button_text = self.font.render("New Game", True, WHITE)
         text_rect = button_text.get_rect(center=button_rect.center)
         self.screen.blit(button_text, text_rect)
 
@@ -625,6 +758,7 @@ class Game:
         self.player1 = Player(100, LEVEL_HEIGHT - 150, RED, 'Characters(100x100)/Orc/Orc/Orc')
         self.player2 = Player(100, LEVEL_HEIGHT - 150, TEAL, 'Characters(100x100)/Soldier/Soldier/Soldier')
         self.platforms = self.generate_level()
+        self.projectiles = []
 
     def run(self):
         running = True
