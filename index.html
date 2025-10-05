@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPIC 2 Player Jump Game - 10x BIGGER!</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <div id="ui-overlay">
+            <div class="title">EPIC 10X MASSIVE LEVEL!</div>
+            <div class="music-text">♪ Epic Music Playing ♪</div>
+            <button id="reset-btn">New Epic Game</button>
+        </div>
+        <div id="stats-container">
+            <div class="player-stats player1-stats">
+                <div class="player-label">Player 1</div>
+                <div class="controls">WASD + S to Attack</div>
+                <div class="stats-row">
+                    <span class="height" id="height1">Height: 0%</span>
+                    <span class="health" id="health1">Health: 100</span>
+                </div>
+                <div class="status" id="status1"></div>
+            </div>
+            <div class="player-stats player2-stats">
+                <div class="player-label">Player 2</div>
+                <div class="controls">Arrows + Down to Attack</div>
+                <div class="stats-row">
+                    <span class="height" id="height2">Height: 0%</span>
+                    <span class="health" id="health2">Health: 100</span>
+                </div>
+                <div class="status" id="status2"></div>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

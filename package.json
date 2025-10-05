@@ -1,0 +1,12 @@
+{
+  "name": "epic-2-player-game",
+  "version": "1.0.0",
+  "description": "Epic 2 Player Jump Game with Phaser 3",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["game", "phaser", "2-player"],
+  "author": "",
+  "license": "MIT"
+}

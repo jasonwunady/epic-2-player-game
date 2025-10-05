@@ -1,0 +1,138 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    color: white;
+}
+
+#game-container {
+    position: relative;
+    width: 1400px;
+    height: 900px;
+}
+
+#ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    z-index: 10;
+    pointer-events: none;
+}
+
+#ui-overlay * {
+    pointer-events: auto;
+}
+
+.title {
+    font-size: 36px;
+    font-weight: bold;
+    color: #FFD700;
+    margin-top: 5px;
+}
+
+.music-text {
+    font-size: 24px;
+    color: white;
+    margin-top: 5px;
+}
+
+#reset-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 15px 32px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    margin-top: 10px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 0.3s;
+}
+
+#reset-btn:hover {
+    background-color: #45a049;
+}
+
+#stats-container {
+    position: absolute;
+    bottom: 10px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+    z-index: 10;
+    padding: 0;
+    pointer-events: none;
+}
+
+.player-stats {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.player1-stats {
+    margin-left: 80px;
+}
+
+.player2-stats {
+    margin-right: 80px;
+}
+
+.player-label {
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.player1-stats .player-label {
+    color: #FF6B6B;
+}
+
+.player2-stats .player-label {
+    color: #4ECDC4;
+}
+
+.controls {
+    font-size: 18px;
+    color: #CCCCCC;
+}
+
+.status {
+    font-size: 32px;
+    font-weight: bold;
+    margin-top: 5px;
+    min-height: 40px;
+}
+
+.stats-row {
+    font-size: 20px;
+    color: white;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+.stats-row span {
+    display: inline-block;
+}
+
+.height {
+    color: #FFD700;
+}
+
+.health {
+    color: #00FF00;
+}
